@@ -1,0 +1,1179 @@
+
+# ================================================================
+# MACHINE LEARNING LAB EXAM - COMPLETE SOLUTION (Q1 + Q2 + Q3)
+# Libraries: NumPy, Pandas, Matplotlib, Seaborn, Scikit-learn
+# Fixed random seeds for reproducibility
+# ================================================================
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+warnings.filterwarnings("ignore")
+
+from collections import deque
+
+from sklearn.datasets import make_classification, make_blobs
+from sklearn.model_selection import (
+    train_test_split, StratifiedKFold, GridSearchCV,
+    cross_val_predict
+)
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import (
+    confusion_matrix, classification_report, precision_score,
+    recall_score, f1_score, balanced_accuracy_score, roc_auc_score,
+    silhouette_score, precision_recall_curve
+)
+from sklearn.cluster import KMeans
+from sklearn.mixture import GaussianMixture
+from sklearn.decomposition import PCA
+
+RANDOM_STATE = 42
+
+# ================================================================
+#                         QUESTION 1
+# IMBALANCED CLASSIFICATION, LEAKAGE PREVENTION
+# AND THRESHOLD OPTIMIZATION
+# ================================================================
+
+print("\n" + "="*70)
+print("QUESTION 1: IMBALANCED CLASSIFICATION")
+print("="*70)
+
+# -------------------- (a) Dataset generation --------------------
+
+X, y = make_classification(
+    n_samples=2500,
+    n_features=20,
+    n_informative=5,
+    n_redundant=3,
+    n_classes=2,
+    weights=[0.90, 0.10],
+    random_state=RANDOM_STATE
+)
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.30,
+    stratify=y,
+    random_state=RANDOM_STATE
+)
+
+print("\nTraining shape:", X_train.shape)
+print("Testing shape:", X_test.shape)
+
+print("\nTraining class distribution:")
+print(pd.Series(y_train).value_counts(normalize=True))
+
+print("\nTesting class distribution:")
+print(pd.Series(y_test).value_counts(normalize=True))
+
+print("""
+Analysis:
+The dataset is imbalanced because class 0 represents approximately
+90% of observations and class 1 represents approximately 10%.
+
+Accuracy alone is unsuitable because a model predicting every sample
+as class 0 could achieve approximately 90% accuracy while detecting
+none of the high-risk cases.
+
+Therefore, recall, precision, F1-score and balanced accuracy are
+important evaluation metrics.
+""")
+
+# -------------------- (b) Baseline models --------------------
+
+lr_pipeline = Pipeline([
+    ("scaler", StandardScaler()),
+    ("model", LogisticRegression(
+        max_iter=2000,
+        random_state=RANDOM_STATE
+    ))
+])
+
+rf_pipeline = Pipeline([
+    ("scaler", StandardScaler()),
+    ("model", RandomForestClassifier(
+        n_estimators=100,
+        random_state=RANDOM_STATE
+    ))
+])
+
+baseline_models = {
+    "Logistic Regression": lr_pipeline,
+    "Random Forest": rf_pipeline
+}
+
+baseline_results = {}
+
+def evaluate_classifier(name, model, X_test, y_test):
+    predictions = model.predict(X_test)
+    probabilities = model.predict_proba(X_test)[:, 1]
+
+    cm = confusion_matrix(y_test, predictions)
+
+    results = {
+        "Precision": precision_score(y_test, predictions, zero_division=0),
+        "Recall": recall_score(y_test, predictions, zero_division=0),
+        "F1 Score": f1_score(y_test, predictions, zero_division=0),
+        "Balanced Accuracy": balanced_accuracy_score(y_test, predictions),
+        "ROC-AUC": roc_auc_score(y_test, probabilities)
+    }
+
+    print(f"\n{name}")
+    print("-"*50)
+    print("Confusion Matrix:\n", cm)
+    print("\nClassification Report:\n",
+          classification_report(y_test, predictions, zero_division=0))
+    print("Metrics:")
+    for metric, value in results.items():
+        print(f"{metric}: {value:.4f}")
+
+    return results
+
+for name, model in baseline_models.items():
+    model.fit(X_train, y_train)
+    baseline_results[name] = evaluate_classifier(
+        name, model, X_test, y_test
+    )
+
+# -------------------- (c) Cross-validation and tuning --------------------
+
+cv = StratifiedKFold(
+    n_splits=5,
+    shuffle=True,
+    random_state=RANDOM_STATE
+)
+
+lr_parameters = {
+    "model__C": [0.01, 0.1, 1, 10],
+    "model__class_weight": [None, "balanced"]
+}
+
+rf_parameters = {
+    "model__n_estimators": [100, 200],
+    "model__max_depth": [None, 10, 20],
+    "model__min_samples_split": [2, 5],
+    "model__class_weight": [None, "balanced"]
+}
+
+lr_grid = GridSearchCV(
+    lr_pipeline,
+    lr_parameters,
+    cv=cv,
+    scoring="recall",
+    n_jobs=-1
+)
+
+rf_grid = GridSearchCV(
+    rf_pipeline,
+    rf_parameters,
+    cv=cv,
+    scoring="recall",
+    n_jobs=-1
+)
+
+lr_grid.fit(X_train, y_train)
+rf_grid.fit(X_train, y_train)
+
+print("\nLogistic Regression Best Parameters:")
+print(lr_grid.best_params_)
+print("Best CV Recall:", lr_grid.best_score_)
+
+print("\nRandom Forest Best Parameters:")
+print(rf_grid.best_params_)
+print("Best CV Recall:", rf_grid.best_score_)
+
+best_models = {
+    "Logistic Regression": lr_grid.best_estimator_,
+    "Random Forest": rf_grid.best_estimator_
+}
+
+best_name = max(
+    best_models,
+    key=lambda name: (
+        lr_grid.best_score_
+        if name == "Logistic Regression"
+        else rf_grid.best_score_
+    )
+)
+
+best_model = best_models[best_name]
+
+print("\nSelected best model:", best_name)
+
+# -------------------- (d) Threshold optimization --------------------
+
+# Generate out-of-fold probabilities using training data only.
+# This prevents using the test set for threshold selection.
+
+oof_probabilities = cross_val_predict(
+    best_model,
+    X_train,
+    y_train,
+    cv=cv,
+    method="predict_proba",
+    n_jobs=-1
+)[:, 1]
+
+thresholds = np.arange(0.10, 0.91, 0.10)
+
+threshold_results = []
+
+for threshold in thresholds:
+    predictions = (oof_probabilities >= threshold).astype(int)
+
+    precision = precision_score(
+        y_train, predictions, zero_division=0
+    )
+    recall = recall_score(
+        y_train, predictions, zero_division=0
+    )
+
+    threshold_results.append({
+        "Threshold": threshold,
+        "Precision": precision,
+        "Recall": recall
+    })
+
+threshold_df = pd.DataFrame(threshold_results)
+
+print("\nThreshold Analysis (Training OOF Predictions):")
+print(threshold_df.to_string(index=False))
+
+# Select maximum recall subject to minimum precision of 0.60.
+valid_thresholds = threshold_df[
+    threshold_df["Precision"] >= 0.60
+]
+
+if len(valid_thresholds) > 0:
+    selected_threshold = valid_thresholds.sort_values(
+        ["Recall", "Precision"],
+        ascending=False
+    ).iloc[0]["Threshold"]
+else:
+    selected_threshold = 0.50
+    print("No tested threshold satisfied precision >= 0.60.")
+
+print("\nSelected Threshold:", selected_threshold)
+
+# Plot precision and recall against threshold.
+plt.figure(figsize=(9, 5))
+
+plt.plot(
+    threshold_df["Threshold"],
+    threshold_df["Precision"],
+    marker="o",
+    label="Precision"
+)
+
+plt.plot(
+    threshold_df["Threshold"],
+    threshold_df["Recall"],
+    marker="s",
+    label="Recall"
+)
+
+plt.axhline(
+    0.60, linestyle="--",
+    label="Minimum Precision = 0.60"
+)
+
+plt.axvline(
+    selected_threshold, linestyle=":",
+    label=f"Selected Threshold = {selected_threshold:.2f}"
+)
+
+plt.xlabel("Classification Threshold")
+plt.ylabel("Score")
+plt.title("Precision and Recall vs Classification Threshold")
+plt.legend()
+plt.grid()
+plt.show()
+
+# -------------------- Final tuned model evaluation --------------------
+
+final_probabilities = best_model.predict_proba(X_test)[:, 1]
+
+final_predictions = (
+    final_probabilities >= selected_threshold
+).astype(int)
+
+print("\nFINAL TUNED MODEL EVALUATION")
+print("Model:", best_name)
+print("Threshold:", selected_threshold)
+
+final_cm = confusion_matrix(y_test, final_predictions)
+
+print("\nConfusion Matrix:\n", final_cm)
+
+print("\nClassification Report:")
+print(classification_report(
+    y_test, final_predictions, zero_division=0
+))
+
+print("Precision:", precision_score(
+    y_test, final_predictions, zero_division=0
+))
+
+print("Recall:", recall_score(
+    y_test, final_predictions, zero_division=0
+))
+
+print("F1 Score:", f1_score(
+    y_test, final_predictions, zero_division=0
+))
+
+print("Balanced Accuracy:", balanced_accuracy_score(
+    y_test, final_predictions
+))
+
+print("ROC-AUC:", roc_auc_score(
+    y_test, final_probabilities
+))
+
+print("""
+Q1 Critical Analysis:
+
+1. Logistic Regression provides a simple linear baseline.
+2. Random Forest captures nonlinear relationships.
+3. Hyperparameter tuning improves model selection.
+4. Lowering the classification threshold generally increases recall
+   but can also increase false positives.
+5. Increasing the threshold generally reduces false positives
+   but may increase false negatives.
+6. False negatives are particularly costly in risk detection because
+   high-risk cases may remain undetected.
+7. The selected threshold maximizes recall while satisfying the
+   minimum precision requirement of 0.60 on training OOF predictions.
+8. The test set is used only for final evaluation, preventing
+   threshold-selection leakage.
+""")
+
+# ================================================================
+#                         QUESTION 2
+# CLUSTERING, MODEL SELECTION AND ROBUSTNESS
+# ================================================================
+
+print("\n" + "="*70)
+print("QUESTION 2: CLUSTERING AND MODEL SELECTION")
+print("="*70)
+
+# -------------------- (a) Dataset generation --------------------
+
+X_cluster, true_labels = make_blobs(
+    n_samples=800,
+    centers=4,
+    n_features=5,
+    cluster_std=1.0,
+    random_state=RANDOM_STATE
+)
+
+# Add Gaussian noise with standard deviation 0.2.
+rng = np.random.default_rng(RANDOM_STATE)
+
+X_cluster = X_cluster + rng.normal(
+    loc=0,
+    scale=0.2,
+    size=X_cluster.shape
+)
+
+# Do not use true_labels for fitting or selecting models.
+
+scaler_cluster = StandardScaler()
+X_scaled = scaler_cluster.fit_transform(X_cluster)
+
+print("\nDataset shape:", X_scaled.shape)
+
+print("""
+Scaling explanation:
+K-Means and Gaussian Mixture Models rely on distances and covariance.
+Features with larger numerical ranges can dominate the calculations.
+StandardScaler transforms features to approximately zero mean and
+unit variance, ensuring comparable feature contributions.
+""")
+
+# -------------------- (b) K-Means analysis --------------------
+
+k_values = [2, 3, 4, 5, 6, 7]
+
+kmeans_results = []
+
+kmeans_models = {}
+
+for k in k_values:
+
+    km = KMeans(
+        n_clusters=k,
+        init="k-means++",
+        n_init=10,
+        random_state=RANDOM_STATE
+    )
+
+    labels = km.fit_predict(X_scaled)
+
+    inertia = km.inertia_
+    silhouette = silhouette_score(X_scaled, labels)
+
+    kmeans_models[k] = km
+
+    kmeans_results.append({
+        "K": k,
+        "Inertia": inertia,
+        "Silhouette": silhouette
+    })
+
+kmeans_df = pd.DataFrame(kmeans_results)
+
+print("\nK-Means Results:")
+print(kmeans_df.to_string(index=False))
+
+# Elbow curve
+plt.figure(figsize=(8, 5))
+plt.plot(
+    kmeans_df["K"],
+    kmeans_df["Inertia"],
+    marker="o"
+)
+plt.xlabel("Number of Clusters (K)")
+plt.ylabel("Inertia")
+plt.title("K-Means Elbow Method")
+plt.grid()
+plt.show()
+
+# Silhouette scores
+plt.figure(figsize=(8, 5))
+plt.plot(
+    kmeans_df["K"],
+    kmeans_df["Silhouette"],
+    marker="o"
+)
+plt.xlabel("Number of Clusters (K)")
+plt.ylabel("Silhouette Score")
+plt.title("K-Means Silhouette Analysis")
+plt.grid()
+plt.show()
+
+best_k_kmeans = int(
+    kmeans_df.loc[
+        kmeans_df["Silhouette"].idxmax(), "K"
+    ]
+)
+
+print("\nBest K-Means K based on Silhouette:", best_k_kmeans)
+
+# -------------------- (c) Gaussian Mixture Models --------------------
+
+gmm_results = []
+gmm_models = {}
+
+for k in k_values:
+
+    gmm = GaussianMixture(
+        n_components=k,
+        covariance_type="full",
+        random_state=RANDOM_STATE,
+        n_init=3
+    )
+
+    gmm.fit(X_scaled)
+
+    labels = gmm.predict(X_scaled)
+
+    bic = gmm.bic(X_scaled)
+    aic = gmm.aic(X_scaled)
+
+    silhouette = silhouette_score(X_scaled, labels)
+
+    gmm_models[k] = gmm
+
+    gmm_results.append({
+        "K": k,
+        "BIC": bic,
+        "AIC": aic,
+        "Silhouette": silhouette
+    })
+
+gmm_df = pd.DataFrame(gmm_results)
+
+print("\nGaussian Mixture Model Results:")
+print(gmm_df.to_string(index=False))
+
+# Select GMM with minimum BIC.
+best_k_gmm = int(
+    gmm_df.loc[gmm_df["BIC"].idxmin(), "K"]
+)
+
+best_gmm = gmm_models[best_k_gmm]
+
+print("\nBest GMM K based on minimum BIC:", best_k_gmm)
+
+plt.figure(figsize=(8, 5))
+
+plt.plot(
+    gmm_df["K"],
+    gmm_df["BIC"],
+    marker="o",
+    label="BIC"
+)
+
+plt.plot(
+    gmm_df["K"],
+    gmm_df["AIC"],
+    marker="s",
+    label="AIC"
+)
+
+plt.xlabel("Number of Components (K)")
+plt.ylabel("Information Criterion")
+plt.title("GMM Model Selection")
+plt.legend()
+plt.grid()
+plt.show()
+
+print("""
+BIC explanation:
+BIC = -2 * log likelihood + p * log(n)
+
+Here, p represents the number of model parameters and n represents
+the number of observations.
+
+A lower BIC indicates a better balance between model fit and model
+complexity. Therefore, the model with minimum BIC is selected.
+""")
+
+# -------------------- (d) PCA visualization --------------------
+
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_scaled)
+
+print("\nPCA Explained Variance Ratio:",
+      pca.explained_variance_ratio_)
+
+print("Total explained variance:",
+      sum(pca.explained_variance_ratio_))
+
+# Selected K-Means model
+selected_kmeans = kmeans_models[best_k_kmeans]
+
+kmeans_labels = selected_kmeans.predict(X_scaled)
+
+# Selected GMM model
+gmm_labels = best_gmm.predict(X_scaled)
+
+fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+axes[0].scatter(
+    X_pca[:, 0],
+    X_pca[:, 1],
+    c=kmeans_labels,
+    cmap="viridis",
+    s=20
+)
+
+axes[0].set_title(
+    f"K-Means Clustering (K={best_k_kmeans})"
+)
+
+axes[0].set_xlabel("Principal Component 1")
+axes[0].set_ylabel("Principal Component 2")
+
+axes[1].scatter(
+    X_pca[:, 0],
+    X_pca[:, 1],
+    c=gmm_labels,
+    cmap="viridis",
+    s=20
+)
+
+axes[1].set_title(
+    f"GMM Clustering (K={best_k_gmm})"
+)
+
+axes[1].set_xlabel("Principal Component 1")
+axes[1].set_ylabel("Principal Component 2")
+
+plt.tight_layout()
+plt.show()
+
+# Cluster sizes
+print("\nK-Means Cluster Sizes:")
+print(pd.Series(kmeans_labels).value_counts().sort_index())
+
+print("\nGMM Cluster Sizes:")
+print(pd.Series(gmm_labels).value_counts().sort_index())
+
+# Silhouette comparison
+kmeans_silhouette = silhouette_score(
+    X_scaled, kmeans_labels
+)
+
+gmm_silhouette = silhouette_score(
+    X_scaled, gmm_labels
+)
+
+print("\nSilhouette Comparison:")
+print("K-Means:", kmeans_silhouette)
+print("GMM:", gmm_silhouette)
+
+# -------------------- (e) Robustness analysis --------------------
+
+print("\nROBUSTNESS ANALYSIS")
+
+robustness_results = []
+
+for seed in [10, 20, 30, 40, 50]:
+
+    km = KMeans(
+        n_clusters=best_k_kmeans,
+        n_init=1,
+        random_state=seed
+    )
+
+    labels = km.fit_predict(X_scaled)
+
+    robustness_results.append({
+        "Seed": seed,
+        "Inertia": km.inertia_,
+        "Silhouette": silhouette_score(X_scaled, labels)
+    })
+
+robustness_df = pd.DataFrame(robustness_results)
+
+print("\nResults for Different Random Seeds:")
+print(robustness_df.to_string(index=False))
+
+print("\nRobustness Summary:")
+print("Mean Inertia:", robustness_df["Inertia"].mean())
+print("Inertia Standard Deviation:",
+      robustness_df["Inertia"].std())
+
+print("Mean Silhouette:",
+      robustness_df["Silhouette"].mean())
+
+print("Silhouette Standard Deviation:",
+      robustness_df["Silhouette"].std())
+
+plt.figure(figsize=(8, 5))
+
+plt.plot(
+    robustness_df["Seed"],
+    robustness_df["Inertia"],
+    marker="o",
+    label="Inertia"
+)
+
+plt.xlabel("Random Seed")
+plt.ylabel("Inertia")
+plt.title("K-Means Robustness Across Different Seeds")
+plt.legend()
+plt.grid()
+plt.show()
+
+# -------------------- (f) Interpretation --------------------
+
+print("""
+Q2 Critical Analysis:
+
+1. Elbow Method:
+   It identifies the point where inertia reduction becomes smaller.
+   However, the elbow may not always be clearly visible.
+
+2. Silhouette Score:
+   It measures how well-separated and compact clusters are.
+   Higher scores generally indicate better separation, but it may
+   favor particular cluster shapes and sizes.
+
+3. BIC:
+   It balances model likelihood and complexity.
+   However, its selection depends on the assumed Gaussian mixture
+   distribution and covariance structure.
+
+4. PCA:
+   PCA reduces five-dimensional data into two dimensions.
+   Some information is lost during dimensionality reduction.
+   Therefore, clusters that appear overlapping in a 2D plot may
+   still be separated in the original five-dimensional space.
+
+5. Robustness:
+   Similar inertia and silhouette scores across random seeds
+   indicate stable clustering. Large variations indicate sensitivity
+   to initialization.
+
+6. Labels generated by make_blobs are not used for model fitting
+   or model selection. All clustering decisions use X_scaled only.
+""")
+
+# ================================================================
+#                         QUESTION 3
+# REINFORCEMENT LEARNING: TABULAR Q-LEARNING
+# ================================================================
+
+print("\n" + "="*70)
+print("QUESTION 3: Q-LEARNING GRID WORLD")
+print("="*70)
+
+# -------------------- (a) Environment setup --------------------
+
+GRID_SIZE = 6
+
+START = (0, 0)
+GOAL = (5, 5)
+
+OBSTACLES = {
+    (1, 1),
+    (1, 3),
+    (2, 3),
+    (3, 1),
+    (4, 3),
+    (4, 4)
+}
+
+# Actions: Up, Down, Left, Right
+ACTIONS = {
+    0: (-1, 0),
+    1: (1, 0),
+    2: (0, -1),
+    3: (0, 1)
+}
+
+ACTION_NAMES = {
+    0: "UP",
+    1: "DOWN",
+    2: "LEFT",
+    3: "RIGHT"
+}
+
+N_STATES = GRID_SIZE * GRID_SIZE
+N_ACTIONS = 4
+
+def state_to_index(state):
+    return state[0] * GRID_SIZE + state[1]
+
+def index_to_state(index):
+    return divmod(index, GRID_SIZE)
+
+def step(state, action):
+
+    dr, dc = ACTIONS[action]
+
+    new_state = (
+        state[0] + dr,
+        state[1] + dc
+    )
+
+    # Prevent movement outside the grid.
+    if not (
+        0 <= new_state[0] < GRID_SIZE
+        and 0 <= new_state[1] < GRID_SIZE
+    ):
+        return state, -1, False
+
+    # Obstacle penalty.
+    if new_state in OBSTACLES:
+        return state, -8, False
+
+    # Goal reward.
+    if new_state == GOAL:
+        return new_state, 25, True
+
+    # Normal movement.
+    return new_state, -1, False
+
+
+# Display grid world
+def display_grid():
+
+    grid = np.zeros((GRID_SIZE, GRID_SIZE))
+
+    for r, c in OBSTACLES:
+        grid[r, c] = -1
+
+    grid[START] = 2
+    grid[GOAL] = 3
+
+    plt.figure(figsize=(6, 6))
+    plt.imshow(grid, cmap="coolwarm")
+
+    for r in range(GRID_SIZE):
+        for c in range(GRID_SIZE):
+
+            if (r, c) == START:
+                label = "START"
+            elif (r, c) == GOAL:
+                label = "GOAL"
+            elif (r, c) in OBSTACLES:
+                label = "X"
+            else:
+                label = ""
+
+            plt.text(c, r, label, ha="center", va="center")
+
+    plt.xticks(range(GRID_SIZE))
+    plt.yticks(range(GRID_SIZE))
+    plt.title("6x6 Grid World")
+    plt.grid()
+    plt.show()
+
+display_grid()
+
+# -------------------- (b) Q-Learning implementation --------------------
+
+def train_q_learning(
+    alpha=0.1,
+    gamma=0.95,
+    epsilon=1.0,
+    epsilon_decay=0.995,
+    min_epsilon=0.05,
+    episodes=3000,
+    seed=42
+):
+
+    rng = np.random.default_rng(seed)
+
+    Q = np.zeros((N_STATES, N_ACTIONS))
+
+    rewards_history = []
+    epsilon_history = []
+
+    for episode in range(episodes):
+
+        state = START
+        total_reward = 0
+
+        for step_number in range(150):
+
+            state_index = state_to_index(state)
+
+            # Epsilon-greedy action selection.
+            if rng.random() < epsilon:
+                action = rng.integers(N_ACTIONS)
+            else:
+                action = np.argmax(Q[state_index])
+
+            next_state, reward, done = step(state, action)
+
+            next_index = state_to_index(next_state)
+
+            # Q-learning update rule.
+            if done:
+                target = reward
+            else:
+                target = reward + gamma * np.max(Q[next_index])
+
+            Q[state_index, action] += alpha * (
+                target - Q[state_index, action]
+            )
+
+            total_reward += reward
+            state = next_state
+
+            if done:
+                break
+
+        rewards_history.append(total_reward)
+
+        epsilon = max(
+            min_epsilon,
+            epsilon * epsilon_decay
+        )
+
+        epsilon_history.append(epsilon)
+
+    return Q, rewards_history, epsilon_history
+
+
+# -------------------- (c) Train and plot reward --------------------
+
+EPISODES = 3000
+
+Q1, rewards1, eps1 = train_q_learning(
+    alpha=0.1,
+    gamma=0.95,
+    epsilon=1.0,
+    epsilon_decay=0.995,
+    min_epsilon=0.05,
+    episodes=EPISODES,
+    seed=42
+)
+
+# 100-episode moving average.
+moving_average = pd.Series(rewards1).rolling(
+    window=100
+).mean()
+
+plt.figure(figsize=(11, 5))
+
+plt.plot(
+    rewards1,
+    alpha=0.3,
+    label="Episode Reward"
+)
+
+plt.plot(
+    moving_average,
+    linewidth=2,
+    label="100 Episode Moving Average"
+)
+
+plt.xlabel("Episode")
+plt.ylabel("Total Reward")
+plt.title("Q-Learning Training Performance")
+plt.legend()
+plt.grid()
+plt.show()
+
+# Epsilon decay
+plt.figure(figsize=(8, 4))
+
+plt.plot(eps1)
+
+plt.xlabel("Episode")
+plt.ylabel("Epsilon")
+plt.title("Epsilon Decay")
+plt.grid()
+plt.show()
+
+print("\nTraining Configuration:")
+print("Learning Rate (Alpha): 0.1")
+print("Discount Factor (Gamma): 0.95")
+print("Initial Epsilon: 1.0")
+print("Minimum Epsilon: 0.05")
+print("Episodes:", EPISODES)
+
+# -------------------- (d) Greedy policy evaluation --------------------
+
+def evaluate_policy(Q):
+
+    state = START
+    path = [state]
+
+    visited = {state}
+
+    total_reward = 0
+    reached_goal = False
+
+    for _ in range(100):
+
+        state_index = state_to_index(state)
+
+        action = np.argmax(Q[state_index])
+
+        next_state, reward, done = step(state, action)
+
+        total_reward += reward
+
+        state = next_state
+        path.append(state)
+
+        if done:
+            reached_goal = True
+            break
+
+        # Protect against loops.
+        if state in visited:
+            print("Loop detected. Stopping evaluation.")
+            break
+
+        visited.add(state)
+
+    return path, total_reward, reached_goal
+
+
+path, total_reward, reached_goal = evaluate_policy(Q1)
+
+print("\nGREEDY POLICY EVALUATION")
+print("Path:", path)
+print("Path Length (moves):", len(path) - 1)
+print("Total Reward:", total_reward)
+print("Goal Reached:", reached_goal)
+
+# Visualize learned path.
+def plot_learned_path(path):
+
+    grid = np.zeros((GRID_SIZE, GRID_SIZE))
+
+    for r, c in OBSTACLES:
+        grid[r, c] = -1
+
+    plt.figure(figsize=(7, 7))
+    plt.imshow(grid, cmap="coolwarm")
+
+    if len(path) > 0:
+        rows = [p[0] for p in path]
+        cols = [p[1] for p in path]
+
+        plt.plot(cols, rows, marker="o", linewidth=2)
+
+    plt.text(
+        START[1], START[0], "START",
+        ha="center", va="bottom"
+    )
+
+    plt.text(
+        GOAL[1], GOAL[0], "GOAL",
+        ha="center", va="bottom"
+    )
+
+    for r, c in OBSTACLES:
+        plt.text(c, r, "X", ha="center", va="center")
+
+    plt.xticks(range(GRID_SIZE))
+    plt.yticks(range(GRID_SIZE))
+    plt.title("Learned Greedy Path")
+    plt.grid()
+    plt.show()
+
+
+plot_learned_path(path)
+
+# Display greedy policy in every cell.
+print("\nLEARNED POLICY")
+
+policy_symbols = {
+    0: "^",
+    1: "v",
+    2: "<",
+    3: ">"
+}
+
+for r in range(GRID_SIZE):
+
+    row = []
+
+    for c in range(GRID_SIZE):
+
+        state = (r, c)
+
+        if state == START:
+            symbol = "S"
+        elif state == GOAL:
+            symbol = "G"
+        elif state in OBSTACLES:
+            symbol = "X"
+        else:
+            action = np.argmax(
+                Q1[state_to_index(state)]
+            )
+            symbol = policy_symbols[action]
+
+        row.append(symbol)
+
+    print(" ".join(row))
+
+
+# -------------------- (e) Parameter analysis --------------------
+
+# Compare two configurations with different learning rates.
+# All other settings are kept the same.
+
+Q2, rewards2, eps2 = train_q_learning(
+    alpha=0.5,
+    gamma=0.95,
+    epsilon=1.0,
+    epsilon_decay=0.995,
+    min_epsilon=0.05,
+    episodes=EPISODES,
+    seed=42
+)
+
+avg1 = pd.Series(rewards1).rolling(100).mean()
+avg2 = pd.Series(rewards2).rolling(100).mean()
+
+plt.figure(figsize=(10, 5))
+
+plt.plot(
+    avg1,
+    label="Alpha = 0.1"
+)
+
+plt.plot(
+    avg2,
+    label="Alpha = 0.5"
+)
+
+plt.xlabel("Episode")
+plt.ylabel("100 Episode Moving Average Reward")
+plt.title("Comparison of Learning Rates")
+plt.legend()
+plt.grid()
+plt.show()
+
+# Tabular comparison.
+comparison = pd.DataFrame({
+    "Configuration": ["Alpha = 0.1", "Alpha = 0.5"],
+    "Mean Last 100 Rewards": [
+        np.mean(rewards1[-100:]),
+        np.mean(rewards2[-100:])
+    ],
+    "Maximum Reward": [
+        max(rewards1),
+        max(rewards2)
+    ],
+    "Final Epsilon": [
+        eps1[-1],
+        eps2[-1]
+    ]
+})
+
+print("\nPARAMETER COMPARISON:")
+print(comparison.to_string(index=False))
+
+# Evaluate second configuration.
+path2, reward2, reached2 = evaluate_policy(Q2)
+
+print("\nConfiguration 2 Greedy Policy:")
+print("Path:", path2)
+print("Path Length:", len(path2) - 1)
+print("Total Reward:", reward2)
+print("Goal Reached:", reached2)
+
+# -------------------- (f) Discussion --------------------
+
+print("""
+Q3 Critical Analysis:
+
+1. Q-Learning:
+   Q-learning is a model-free reinforcement learning algorithm.
+   It learns the value of taking an action in a particular state.
+
+2. Update Rule:
+   Q(s,a) = Q(s,a) + alpha * [
+       reward + gamma * max(Q(s',a')) - Q(s,a)
+   ]
+
+3. Epsilon-Greedy:
+   With probability epsilon, a random action is selected.
+   Otherwise, the action with the highest Q-value is selected.
+
+4. Epsilon Decay:
+   Epsilon gradually decreases during training.
+   This allows exploration initially and exploitation later.
+
+5. Learning Rate:
+   A higher learning rate updates Q-values more aggressively.
+   A lower learning rate produces smaller updates and may learn
+   more gradually.
+
+6. High Training Reward:
+   A high reward during training does not guarantee a reliable
+   policy because the agent may have learned a policy that works
+   for frequently visited states but not other situations.
+
+7. Tabular Q-Learning Limitation:
+   The Q-table grows with the number of states and actions.
+   Therefore, tabular Q-learning becomes inefficient for large or
+   continuous state spaces.
+
+8. Loop Prevention:
+   A visited-state set prevents infinite loops during policy
+   evaluation.
+""")
+
+print("\n" + "="*70)
+print("ALL THREE QUESTIONS COMPLETED SUCCESSFULLY")
+print("="*70)
