@@ -1,0 +1,2376 @@
+#### Assignment 1 ######
+ 
+Q1. Load the Boston Housing Dataset (use sklearn.datasets.load_boston() or
+alternative synthetic dataset if deprecated).
+2. Preprocess the dataset:
+o Normalize/standardize the features.
+o Split the data into 70% training and 30% testing.
+3. Train a Linear Regression model on the training data.
+4. Predict both training and test data.
+5. Calculate and report the following:
+o Mean Squared Error (MSE) on training and test sets
+o R2 Score on training and test sets
+6. Plot:
+o Training error vs. Test error
+o Actual vs. Predicted values for test set
+ 
+ 
+Q1 Answer -> 
+ 
+# 1. Import Libraries
+ 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+ 
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+ 
+ 
+# 2. Load Dataset
+ 
+df = pd.read_csv("BostonHousing.csv")
+ 
+print(df.head())
+print("Dataset Shape:", df.shape)
+ 
+ 
+# 3. Preprocessing
+ 
+df = df.loc[:, ~df.columns.str.contains("^Unnamed")]
+ 
+target_col = next(
+    col for col in df.columns
+    if col.lower() == "medv"
+)
+ 
+X = df.drop(columns=[target_col])
+y = df[target_col]
+ 
+X = X.drop(columns=["CAT.MEDV"], errors="ignore")
+ 
+ 
+# 4. Split Dataset (70% Training, 30% Testing)
+ 
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.30,
+    random_state=42
+)
+ 
+print("Training Shape:", X_train.shape)
+print("Testing Shape:", X_test.shape)
+ 
+ 
+# 5. Standardize Features
+ 
+scaler = StandardScaler()
+ 
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+ 
+ 
+# 6. Train Linear Regression Model
+ 
+model = LinearRegression()
+ 
+model.fit(X_train_scaled, y_train)
+ 
+print("Model Trained Successfully!")
+ 
+ 
+# 7. Predict Training and Testing Data
+ 
+y_train_pred = model.predict(X_train_scaled)
+y_test_pred = model.predict(X_test_scaled)
+ 
+ 
+# 8. Calculate MSE and R2 Score
+ 
+train_mse = mean_squared_error(y_train, y_train_pred)
+test_mse = mean_squared_error(y_test, y_test_pred)
+ 
+train_r2 = r2_score(y_train, y_train_pred)
+test_r2 = r2_score(y_test, y_test_pred)
+ 
+print("\nTraining Results")
+print("----------------------")
+print("Training MSE:", train_mse)
+print("Training R2 Score:", train_r2)
+ 
+print("\nTesting Results")
+print("----------------------")
+print("Testing MSE:", test_mse)
+print("Testing R2 Score:", test_r2)
+ 
+ 
+# 9. Plot Training Error vs Testing Error
+ 
+plt.figure(figsize=(8, 5))
+ 
+plt.bar(
+    ["Training Error", "Testing Error"],
+    [train_mse, test_mse]
+)
+ 
+plt.title("Training Error vs Testing Error")
+plt.xlabel("Dataset")
+plt.ylabel("Mean Squared Error")
+ 
+plt.show()
+ 
+ 
+# 10. Plot Actual vs Predicted Values
+ 
+plt.figure(figsize=(8, 5))
+ 
+plt.scatter(y_test, y_test_pred)
+ 
+min_val = min(y_test.min(), y_test_pred.min())
+max_val = max(y_test.max(), y_test_pred.max())
+ 
+plt.plot(
+    [min_val, max_val],
+    [min_val, max_val],
+    linestyle="--"
+)
+ 
+plt.title("Actual vs Predicted House Prices")
+plt.xlabel("Actual House Prices")
+plt.ylabel("Predicted House Prices")
+ 
+plt.show()
+ 
+ 
+ 
+ 
+ 
+########## Assignment2 #########
+ 
+ 
+Q1. Logistic Regression Implementation & Analysis
+ 
+Dataset: Breast Cancer dataset from sklearn.datasets
+Tasks:
+ a) Preprocess the dataset (handle missing values, normalize if needed).
+ b) Train a Logistic Regression model using 70% training data.
+ c) Evaluate the model on the test set using the following metrics:
+o Accuracy
+o Confusion Matrix
+o Precision, Recall, and F1-score
+ d) Plot the ROC curve and calculate AUC.
+ 
+Q2. SVM Implementation & Comparative Analysis
+Use the same dataset and repeat the experiment using an SVM classifier.
+Tasks:
+ a) Train an SVM classifier with an RBF kernel.
+ b) Evaluate the model using the same metrics as in Question 1.
+ c) Visualize the decision boundary using 2D feature projection or PCA.
+ d) Compare and summarize the performance of SVM vs. Logistic Regression in terms
+of:
+o Classification accuracy
+o Margin behavior and generalization
+o Training time and interpretability
+ e) Justify which model is more suitable for this dataset and why.
+ 
+ 
+ 
+ 
+2.Answer Q1.->
+ 
+# 1. Import Libraries
+ 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+ 
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LogisticRegression
+ 
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    classification_report,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_curve,
+    roc_auc_score
+)
+ 
+ 
+# 2. Load Breast Cancer Dataset
+ 
+data = load_breast_cancer()
+ 
+X = pd.DataFrame(data.data, columns=data.feature_names)
+y = data.target
+ 
+print("Dataset Shape:", X.shape)
+print(X.head())
+ 
+ 
+# 3. Handle Missing Values
+ 
+imputer = SimpleImputer(strategy="mean")
+ 
+X = imputer.fit_transform(X)
+ 
+ 
+# 4. Split Dataset (70% Training, 30% Testing)
+ 
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.30,
+    random_state=42,
+    stratify=y
+)
+ 
+ 
+# 5. Standardize Features
+ 
+scaler = StandardScaler()
+ 
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+ 
+ 
+# 6. Train Logistic Regression Model
+ 
+model = LogisticRegression(max_iter=10000)
+ 
+model.fit(X_train, y_train)
+ 
+ 
+# 7. Predict Test Data
+ 
+y_pred = model.predict(X_test)
+ 
+y_prob = model.predict_proba(X_test)[:, 1]
+ 
+ 
+# 8. Calculate Evaluation Metrics
+ 
+accuracy = accuracy_score(y_test, y_pred)
+ 
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+ 
+cm = confusion_matrix(y_test, y_pred)
+ 
+auc = roc_auc_score(y_test, y_prob)
+ 
+ 
+print("\nLogistic Regression Results")
+print("--------------------------------")
+ 
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+print("AUC Score:", auc)
+ 
+print("\nConfusion Matrix:")
+print(cm)
+ 
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=data.target_names))
+ 
+ 
+# 9. Plot Confusion Matrix
+ 
+plt.figure(figsize=(6, 5))
+ 
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=data.target_names,
+    yticklabels=data.target_names
+)
+ 
+plt.title("Logistic Regression Confusion Matrix")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+ 
+plt.show()
+ 
+ 
+# 10. Plot ROC Curve
+ 
+fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+ 
+plt.figure(figsize=(7, 5))
+ 
+plt.plot(fpr, tpr, label=f"AUC = {auc:.3f}")
+plt.plot([0, 1], [0, 1], linestyle="--")
+ 
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve - Logistic Regression")
+ 
+plt.legend()
+plt.show()
+ 
+ 
+-------------------
+ 
+2Answer Q2(SVM) ->
+ 
+# 1. Import Libraries
+ 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import time
+ 
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.svm import SVC
+from sklearn.decomposition import PCA
+ 
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    classification_report,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_curve,
+    roc_auc_score
+)
+ 
+ 
+# 2. Load Breast Cancer Dataset
+ 
+data = load_breast_cancer()
+ 
+X = pd.DataFrame(data.data, columns=data.feature_names)
+y = data.target
+ 
+print("Dataset Shape:", X.shape)
+ 
+ 
+# 3. Handle Missing Values
+ 
+imputer = SimpleImputer(strategy="mean")
+ 
+X = imputer.fit_transform(X)
+ 
+ 
+# 4. Split Dataset (70% Training, 30% Testing)
+ 
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.30,
+    random_state=42,
+    stratify=y
+)
+ 
+ 
+# 5. Standardize Features
+ 
+scaler = StandardScaler()
+ 
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+ 
+ 
+# 6. Train SVM Model with RBF Kernel
+ 
+model = SVC(
+    kernel="rbf",
+    C=1.0,
+    gamma="scale",
+    probability=True,
+    random_state=42
+)
+ 
+start_time = time.time()
+ 
+model.fit(X_train, y_train)
+ 
+training_time = time.time() - start_time
+ 
+ 
+# 7. Predict Test Data
+ 
+y_pred = model.predict(X_test)
+ 
+y_prob = model.predict_proba(X_test)[:, 1]
+ 
+ 
+# 8. Calculate Evaluation Metrics
+ 
+accuracy = accuracy_score(y_test, y_pred)
+ 
+precision = precision_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+f1 = f1_score(y_test, y_pred)
+ 
+cm = confusion_matrix(y_test, y_pred)
+ 
+auc = roc_auc_score(y_test, y_prob)
+ 
+ 
+print("\nSVM Classification Results")
+print("--------------------------------")
+ 
+print("Accuracy:", accuracy)
+print("Precision:", precision)
+print("Recall:", recall)
+print("F1 Score:", f1)
+print("AUC Score:", auc)
+print("Training Time:", training_time, "seconds")
+ 
+print("\nConfusion Matrix:")
+print(cm)
+ 
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred, target_names=data.target_names))
+ 
+ 
+# 9. Plot Confusion Matrix
+ 
+plt.figure(figsize=(6, 5))
+ 
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="Greens",
+    xticklabels=data.target_names,
+    yticklabels=data.target_names
+)
+ 
+plt.title("SVM Confusion Matrix")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+ 
+plt.show()
+ 
+ 
+# 10. Plot ROC Curve
+ 
+fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+ 
+plt.figure(figsize=(7, 5))
+ 
+plt.plot(fpr, tpr, label=f"AUC = {auc:.3f}")
+plt.plot([0, 1], [0, 1], linestyle="--")
+ 
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("ROC Curve - SVM")
+ 
+plt.legend()
+plt.show()
+ 
+ 
+# 11. Visualize Decision Boundary Using PCA
+ 
+pca = PCA(n_components=2)
+ 
+X_train_pca = pca.fit_transform(X_train)
+X_test_pca = pca.transform(X_test)
+ 
+svm_pca = SVC(kernel="rbf", C=1.0, gamma="scale")
+ 
+svm_pca.fit(X_train_pca, y_train)
+ 
+ 
+# Create Mesh Grid
+ 
+x_min, x_max = X_train_pca[:, 0].min() - 1, X_train_pca[:, 0].max() + 1
+y_min, y_max = X_train_pca[:, 1].min() - 1, X_train_pca[:, 1].max() + 1
+ 
+xx, yy = np.meshgrid(
+    np.linspace(x_min, x_max, 300),
+    np.linspace(y_min, y_max, 300)
+)
+ 
+Z = svm_pca.predict(
+    np.c_[xx.ravel(), yy.ravel()]
+)
+ 
+Z = Z.reshape(xx.shape)
+ 
+ 
+# Plot Decision Boundary
+ 
+plt.figure(figsize=(9, 6))
+ 
+plt.contourf(xx, yy, Z, alpha=0.3, cmap="coolwarm")
+ 
+plt.scatter(
+    X_train_pca[:, 0],
+    X_train_pca[:, 1],
+    c=y_train,
+    cmap="coolwarm",
+    edgecolors="black"
+)
+ 
+plt.title("SVM Decision Boundary Using PCA")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+ 
+plt.show()
+ 
+ 
+# 12. Model Comparison
+ 
+comparison = pd.DataFrame({
+    "Metric": ["Accuracy", "Precision", "Recall", "F1 Score", "AUC"],
+    "SVM": [
+        accuracy_score(y_test, y_pred),
+        precision_score(y_test, y_pred),
+        recall_score(y_test, y_pred),
+        f1_score(y_test, y_pred),
+        roc_auc_score(y_test, y_prob)
+    ]
+})
+ 
+print("\nSVM Performance:")
+print(comparison)
+ 
+ 
+# Train Logistic Regression and SVM for comparison
+ 
+log_model = LogisticRegression(max_iter=10000)
+ 
+svm_model = SVC(
+    kernel="rbf",
+    C=1.0,
+    gamma="scale",
+    probability=True,
+    random_state=42
+)
+ 
+# Training time - Logistic Regression
+ 
+start = time.time()
+log_model.fit(X_train, y_train)
+log_time = time.time() - start
+ 
+# Training time - SVM
+ 
+start = time.time()
+svm_model.fit(X_train, y_train)
+svm_time = time.time() - start
+ 
+ 
+# Predictions
+ 
+log_pred = log_model.predict(X_test)
+svm_pred = svm_model.predict(X_test)
+ 
+log_prob = log_model.predict_proba(X_test)[:, 1]
+svm_prob = svm_model.predict_proba(X_test)[:, 1]
+ 
+ 
+# Comparison Table
+ 
+results = pd.DataFrame({
+    "Metric": [
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "F1 Score",
+        "AUC",
+        "Training Time (seconds)"
+    ],
+ 
+    "Logistic Regression": [
+        accuracy_score(y_test, log_pred),
+        precision_score(y_test, log_pred),
+        recall_score(y_test, log_pred),
+        f1_score(y_test, log_pred),
+        roc_auc_score(y_test, log_prob),
+        log_time
+    ],
+ 
+    "SVM (RBF)": [
+        accuracy_score(y_test, svm_pred),
+        precision_score(y_test, svm_pred),
+        recall_score(y_test, svm_pred),
+        f1_score(y_test, svm_pred),
+        roc_auc_score(y_test, svm_prob),
+        svm_time
+    ]
+})
+ 
+print("\nLogistic Regression vs SVM")
+print(results.to_string(index=False))
+ 
+ 
+# Accuracy Comparison Graph
+ 
+plt.figure(figsize=(8, 5))
+ 
+plt.bar(
+    ["Logistic Regression", "SVM"],
+    [
+        accuracy_score(y_test, log_pred),
+        accuracy_score(y_test, svm_pred)
+    ]
+)
+ 
+plt.title("Accuracy Comparison")
+plt.ylabel("Accuracy")
+plt.show()
+ 
+ 
+# Training Time Comparison
+ 
+plt.figure(figsize=(8, 5))
+ 
+plt.bar(
+    ["Logistic Regression", "SVM"],
+    [log_time, svm_time]
+)
+ 
+plt.title("Training Time Comparison")
+plt.ylabel("Time (seconds)")
+plt.show()
+ 
+ 
+ 
+ 
+############## Assignment3 ################
+ 
+Q1: Supervised Learning using Decision Tree
+Steps:
+1. Load the dataset (e.g., load_iris)
+2. Split into train/test using train_test_split
+3. Train a Decision Tree Classifier
+4. Evaluate using:
+o Accuracy
+o Confusion Matrix
+o Classification Report
+5. Visualize the decision tree using plot_tree() or export to text
+ 
+ 
+ 
+Q2: Unsupervised Learning using K-Means
+Steps:
+1. Use the same dataset, but only the feature values (exclude labels)
+2. Apply KMeans clustering with n_clusters = 3
+3. Visualize clusters using:
+o 2D scatter plot
+4. Compare clustering output with true labels using:
+o Adjusted Rand Index (ARI) or
+o Confusion matrix (after mapping clusters to labels)
+ 
+----
+3Answer -> supervised learning
+ 
+# 1. Import Libraries
+ 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+ 
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    classification_report,
+    ConfusionMatrixDisplay
+)
+ 
+ 
+# 2. Load Iris Dataset
+ 
+data = load_iris()
+ 
+X = data.data
+y = data.target
+ 
+print("Dataset Shape:", X.shape)
+print("Target Shape:", y.shape)
+ 
+ 
+# 3. Split Dataset into Training and Testing
+ 
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y,
+    test_size=0.30,
+    random_state=42,
+    stratify=y
+)
+ 
+print("Training Shape:", X_train.shape)
+print("Testing Shape:", X_test.shape)
+ 
+ 
+# 4. Train Decision Tree Classifier
+ 
+model = DecisionTreeClassifier(
+    criterion="gini",
+    random_state=42
+)
+ 
+model.fit(X_train, y_train)
+ 
+print("Decision Tree Model Trained Successfully!")
+ 
+ 
+# 5. Predict Test Data
+ 
+y_pred = model.predict(X_test)
+ 
+ 
+# 6. Evaluate Model
+ 
+accuracy = accuracy_score(y_test, y_pred)
+ 
+cm = confusion_matrix(y_test, y_pred)
+ 
+print("\nAccuracy:", accuracy)
+ 
+print("\nConfusion Matrix:")
+print(cm)
+ 
+print("\nClassification Report:")
+print(classification_report(
+    y_test,
+    y_pred,
+    target_names=data.target_names
+))
+ 
+ 
+# 7. Visualize Confusion Matrix
+ 
+ConfusionMatrixDisplay(
+    confusion_matrix=cm,
+    display_labels=data.target_names
+).plot(cmap="Blues")
+ 
+plt.title("Decision Tree Confusion Matrix")
+plt.show()
+ 
+ 
+# 8. Visualize Decision Tree
+ 
+plt.figure(figsize=(18, 10))
+ 
+plot_tree(
+    model,
+    feature_names=data.feature_names,
+    class_names=data.target_names,
+    filled=True,
+    rounded=True,
+    fontsize=9
+)
+ 
+plt.title("Decision Tree Visualization")
+plt.show()
+ 
+ 
+# 9. Display Tree Rules
+ 
+from sklearn.tree import export_text
+ 
+tree_rules = export_text(
+    model,
+    feature_names=data.feature_names
+)
+ 
+print("\nDecision Tree Rules:")
+print(tree_rules)
+ 
+ 
+---------------------------------
+3Answer Q2 -> unsupervised learning
+ 
+# 1. Import Libraries
+ 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+ 
+from sklearn.datasets import load_iris
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import adjusted_rand_score
+ 
+ 
+# 2. Load Iris Dataset
+ 
+data = load_iris()
+ 
+X = data.data
+y = data.target
+ 
+print("Dataset Shape:", X.shape)
+ 
+ 
+# 3. Standardize Features
+ 
+scaler = StandardScaler()
+ 
+X_scaled = scaler.fit_transform(X)
+ 
+ 
+# 4. Apply K-Means Clustering
+ 
+kmeans = KMeans(
+    n_clusters=3,
+    random_state=42,
+    n_init=10
+)
+ 
+clusters = kmeans.fit_predict(X_scaled)
+ 
+print("\nCluster Labels:")
+print(clusters)
+ 
+ 
+# 5. Visualize Clusters Using PCA (2D)
+ 
+pca = PCA(n_components=2)
+ 
+X_pca = pca.fit_transform(X_scaled)
+ 
+ 
+# Plot K-Means Clusters
+ 
+plt.figure(figsize=(8, 6))
+ 
+plt.scatter(
+    X_pca[:, 0],
+    X_pca[:, 1],
+    c=clusters,
+    cmap="viridis",
+    s=50
+)
+ 
+plt.title("K-Means Clustering (PCA 2D)")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+ 
+plt.colorbar(label="Cluster")
+plt.show()
+ 
+ 
+# 6. Visualize Actual Labels
+ 
+plt.figure(figsize=(8, 6))
+ 
+plt.scatter(
+    X_pca[:, 0],
+    X_pca[:, 1],
+    c=y,
+    cmap="viridis",
+    s=50
+)
+ 
+plt.title("Actual Iris Classes (PCA 2D)")
+plt.xlabel("Principal Component 1")
+plt.ylabel("Principal Component 2")
+ 
+plt.colorbar(label="Actual Class")
+plt.show()
+ 
+ 
+# 7. Compare Clusters with Actual Labels Using ARI
+ 
+ari = adjusted_rand_score(y, clusters)
+ 
+print("\nAdjusted Rand Index (ARI):", ari)
+ 
+ 
+# 8. Display Comparison Table
+ 
+comparison = pd.DataFrame({
+    "Actual Labels": y,
+    "Predicted Clusters": clusters
+})
+ 
+print("\nActual Labels vs Predicted Clusters:")
+print(comparison.head(20))
+ 
+ 
+# 9. Display Cluster Centers
+ 
+print("\nCluster Centers:")
+print(kmeans.cluster_centers_)
+ 
+ 
+ 
+ 
+ 
+ 
+################### Assignment5  ##############
+ 
+ 
+Datasets:
+1. SMS Spam Dataset (Text Classification: Spam or Not Spam)
+o Features: Word frequencies or TF-IDF scores
+o Labels: spam / ham
+2. Titanic Dataset (Tabular data)
+o Features: Pclass, Sex, Age, etc.
+o Label: Survived (0 or 1)
+ 
+Q1Task A: Implement Naive Bayes Classifier
+1. Load and preprocess the dataset
+o For SMS Spam: vectorize text using CountVectorizer or TfidfVectorizer
+o For Titanic: handle missing values, encode categorical variables
+2. Train a Naive Bayes model (GaussianNB or MultinomialNB)
+3. Evaluate the model using:
+o Accuracy
+o Confusion Matrix
+o Precision, Recall, F1-score
+4. Visualize class-conditional probabilities using bar plots or heatmaps
+o Example: Probability of spam given presence of certain words
+o Or: Likelihood of survival given age/sex class
+ 
+ 
+Q2Task B: Comparison with Decision Tree (6 marks)
+1. Train a Decision Tree Classifier on the same dataset
+2. Evaluate and compare:
+o Accuracy & Confusion Matrix
+o Interpretation: Why might one perform better than the other?
+3. Visualize the decision tree structure using plot_tree()
+ 
+ 
+ 
+5Answer-> navie bayes classifier(TASK A)
+ 
+# 1. Import Libraries
+ 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+ 
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.naive_bayes import MultinomialNB
+ 
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    classification_report,
+    precision_score,
+    recall_score,
+    f1_score
+)
+ 
+ 
+# 2. Load Dataset
+ 
+df = pd.read_csv("spam.csv", encoding="latin-1")
+ 
+df = df.iloc[:, :2]
+df.columns = ["label", "message"]
+ 
+print(df.head())
+print(df.shape)
+ 
+ 
+# 3. Preprocessing
+ 
+df.dropna(inplace=True)
+ 
+df["label"] = df["label"].map({
+    "ham": 0,
+    "spam": 1
+})
+ 
+ 
+# 4. Split Dataset
+ 
+X_train, X_test, y_train, y_test = train_test_split(
+    df["message"],
+    df["label"],
+    test_size=0.30,
+    random_state=42,
+    stratify=df["label"]
+)
+ 
+ 
+# 5. Convert Text into TF-IDF Features
+ 
+vectorizer = TfidfVectorizer(stop_words="english")
+ 
+X_train = vectorizer.fit_transform(X_train)
+X_test = vectorizer.transform(X_test)
+ 
+ 
+# 6. Train Naive Bayes Model
+ 
+nb_model = MultinomialNB()
+ 
+nb_model.fit(X_train, y_train)
+ 
+ 
+# 7. Prediction
+ 
+y_pred_nb = nb_model.predict(X_test)
+ 
+ 
+# 8. Evaluation
+ 
+print("\nNaive Bayes Results")
+ 
+print("Accuracy:", accuracy_score(y_test, y_pred_nb))
+ 
+print("Precision:", precision_score(y_test, y_pred_nb))
+ 
+print("Recall:", recall_score(y_test, y_pred_nb))
+ 
+print("F1 Score:", f1_score(y_test, y_pred_nb))
+ 
+cm_nb = confusion_matrix(y_test, y_pred_nb)
+ 
+print("\nConfusion Matrix:")
+print(cm_nb)
+ 
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred_nb))
+ 
+ 
+# 9. Visualize Confusion Matrix
+ 
+plt.figure(figsize=(6, 5))
+ 
+sns.heatmap(
+    cm_nb,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    xticklabels=["Ham", "Spam"],
+    yticklabels=["Ham", "Spam"]
+)
+ 
+plt.title("Naive Bayes Confusion Matrix")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+ 
+plt.show()
+ 
+ 
+# 10. Visualize Class-Conditional Word Probabilities
+ 
+feature_names = vectorizer.get_feature_names_out()
+ 
+spam_prob = nb_model.feature_log_prob_[1]
+ham_prob = nb_model.feature_log_prob_[0]
+ 
+top_spam = np.argsort(spam_prob)[-10:]
+top_ham = np.argsort(ham_prob)[-10:]
+ 
+plt.figure(figsize=(10, 5))
+ 
+plt.bar(
+    feature_names[top_spam],
+    np.exp(spam_prob[top_spam])
+)
+ 
+plt.title("Top Words Associated with Spam")
+plt.xlabel("Words")
+plt.ylabel("Conditional Probability")
+plt.xticks(rotation=45)
+ 
+plt.show()
+ 
+ 
+plt.figure(figsize=(10, 5))
+ 
+plt.bar(
+    feature_names[top_ham],
+    np.exp(ham_prob[top_ham])
+)
+ 
+plt.title("Top Words Associated with Ham")
+plt.xlabel("Words")
+plt.ylabel("Conditional Probability")
+plt.xticks(rotation=45)
+ 
+plt.show()
+ 
+ 
+ 
+---------------------
+5Answer -> sms decision tree
+ 
+# 1. Import Libraries
+ 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+ 
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+ 
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    classification_report,
+    precision_score,
+    recall_score,
+    f1_score
+)
+ 
+ 
+# 2. Load Dataset
+ 
+df = pd.read_csv("spam.csv", encoding="latin-1")
+ 
+df = df.iloc[:, :2]
+df.columns = ["label", "message"]
+ 
+df.dropna(inplace=True)
+ 
+df["label"] = df["label"].map({
+    "ham": 0,
+    "spam": 1
+})
+ 
+ 
+# 3. Split Dataset
+ 
+X_train, X_test, y_train, y_test = train_test_split(
+    df["message"],
+    df["label"],
+    test_size=0.30,
+    random_state=42,
+    stratify=df["label"]
+)
+ 
+ 
+# 4. TF-IDF Vectorization
+ 
+vectorizer = TfidfVectorizer(stop_words="english")
+ 
+X_train = vectorizer.fit_transform(X_train)
+X_test = vectorizer.transform(X_test)
+ 
+ 
+# 5. Train Decision Tree Classifier
+ 
+dt_model = DecisionTreeClassifier(
+    criterion="gini",
+    max_depth=10,
+    random_state=42
+)
+ 
+dt_model.fit(X_train, y_train)
+ 
+ 
+# 6. Prediction
+ 
+y_pred_dt = dt_model.predict(X_test)
+ 
+ 
+# 7. Evaluation
+ 
+print("\nDecision Tree Results")
+ 
+print("Accuracy:", accuracy_score(y_test, y_pred_dt))
+ 
+print("Precision:", precision_score(y_test, y_pred_dt))
+ 
+print("Recall:", recall_score(y_test, y_pred_dt))
+ 
+print("F1 Score:", f1_score(y_test, y_pred_dt))
+ 
+cm_dt = confusion_matrix(y_test, y_pred_dt)
+ 
+print("\nConfusion Matrix:")
+print(cm_dt)
+ 
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred_dt))
+ 
+ 
+# 8. Visualize Confusion Matrix
+ 
+plt.figure(figsize=(6, 5))
+ 
+sns.heatmap(
+    cm_dt,
+    annot=True,
+    fmt="d",
+    cmap="Greens",
+    xticklabels=["Ham", "Spam"],
+    yticklabels=["Ham", "Spam"]
+)
+ 
+plt.title("Decision Tree Confusion Matrix")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+ 
+plt.show()
+ 
+ 
+# 9. Visualize Decision Tree
+ 
+plt.figure(figsize=(20, 10))
+ 
+plot_tree(
+    dt_model,
+    feature_names=vectorizer.get_feature_names_out(),
+    class_names=["Ham", "Spam"],
+    filled=True,
+    rounded=True,
+    max_depth=3,
+    fontsize=8
+)
+ 
+plt.title("Decision Tree Structure (First 3 Levels)")
+plt.show()
+ 
+ 
+# 10. Compare Naive Bayes and Decision Tree
+ 
+comparison = pd.DataFrame({
+    "Metric": ["Accuracy", "Precision", "Recall", "F1 Score"],
+ 
+    "Naive Bayes": [
+        accuracy_score(y_test, y_pred_nb),
+        precision_score(y_test, y_pred_nb),
+        recall_score(y_test, y_pred_nb),
+        f1_score(y_test, y_pred_nb)
+    ],
+ 
+    "Decision Tree": [
+        accuracy_score(y_test, y_pred_dt),
+        precision_score(y_test, y_pred_dt),
+        recall_score(y_test, y_pred_dt),
+        f1_score(y_test, y_pred_dt)
+    ]
+})
+ 
+print("\nModel Comparison:")
+print(comparison)
+ 
+ 
+# 11. Accuracy Comparison Graph
+ 
+plt.figure(figsize=(8, 5))
+ 
+plt.bar(
+    ["Naive Bayes", "Decision Tree"],
+    [
+        accuracy_score(y_test, y_pred_nb),
+        accuracy_score(y_test, y_pred_dt)
+    ]
+)
+ 
+plt.title("Naive Bayes vs Decision Tree")
+plt.ylabel("Accuracy")
+ 
+plt.show()
+ 
+ 
+ 
+ 
+ 
+ 
+############### Assignment 6 ######################
+ 
+Task 1 – Grid-world Navigation
+Environment Setup
+ Grid size: 6x6
+ Start: (0,0)
+ Goal: (5,5)
+ 5 randomly placed obstacles (agent cannot pass).
+Rewards
+ +10 for reaching the goal.
+ -5 for hitting an obstacle.
+ -1 for every move.
+Instructions
+1. Represent the grid as states (36 cells).
+2. Define actions: Up, Down, Left, Right.
+3. Initialize Q-table with zeros.
+4. Use ε-greedy action selection.
+5. Update Q-values using the Q-learning update rule.
+Results:
+ Print the final Q-table.
+ Show the optimal path from (0,0) → (5,5).
+ 
+ 
+ 
+Task 2 – Taxi-v3 Environment
+Use OpenAI Gym’s Taxi-v3 environment: pip install gym
+ Agent = taxi.
+ Goal = pick up passenger and drop at destination.
+Rewards
+ +20 for successful drop-off.
+ -10 for illegal pick-up/drop-off.
+ -1 for each timestep.
+Instructions
+1. Initialize Q-table with state-action pairs.
+2. Implement ε-greedy policy.
+3. Train for 1000 episodes.
+4. Update Q-values with the Q-learning rule.
+Results:
+1. Plot episode reward vs. number of episodes.
+2. Show the learned optimal trajectory for at least one ride.
+3. Compare agent performance for γ = 0.5, 0.9, 0.99.
+ 
+ 
+6Answer -> TASK A
+ 
+import numpy as np
+import random
+ 
+# Environment setup
+GRID_SIZE = 6
+START = (0, 0)
+GOAL = (5, 5)
+ACTIONS = ["Up", "Down", "Left", "Right"]
+ 
+# Create 36 states
+states = [(i, j) for i in range(GRID_SIZE) for j in range(GRID_SIZE)]
+ 
+# Randomly place 5 obstacles, excluding start and goal
+random.seed(42)
+available = [s for s in states if s != START and s != GOAL]
+OBSTACLES = set(random.sample(available, 5))
+ 
+print("Obstacles:", OBSTACLES)
+ 
+# Initialize Q-table
+Q = np.zeros((36, 4))
+ 
+# Hyperparameters
+alpha = 0.1
+gamma = 0.9
+epsilon = 1.0
+epsilon_min = 0.01
+epsilon_decay = 0.995
+episodes = 5000
+max_steps = 100
+ 
+def state_to_index(state):
+    return state[0] * GRID_SIZE + state[1]
+ 
+def get_next_state(state, action):
+    row, col = state
+ 
+    if action == 0:      # Up
+        row -= 1
+    elif action == 1:    # Down
+        row += 1
+    elif action == 2:    # Left
+        col -= 1
+    elif action == 3:    # Right
+        col += 1
+ 
+    # Prevent movement outside grid
+    row = max(0, min(GRID_SIZE - 1, row))
+    col = max(0, min(GRID_SIZE - 1, col))
+ 
+    return (row, col)
+ 
+# Q-learning training
+for episode in range(episodes):
+    state = START
+ 
+    for step in range(max_steps):
+ 
+        state_index = state_to_index(state)
+ 
+        # Epsilon-greedy action selection
+        if random.random() < epsilon:
+            action = random.randint(0, 3)
+        else:
+            action = np.argmax(Q[state_index])
+ 
+        next_state = get_next_state(state, action)
+ 
+        # Calculate reward
+        if next_state in OBSTACLES:
+            reward = -5
+            next_state = state
+            done = False
+        elif next_state == GOAL:
+            reward = 10
+            done = True
+        else:
+            reward = -1
+            done = False
+ 
+        next_index = state_to_index(next_state)
+ 
+        # Q-learning update
+        Q[state_index, action] += alpha * (
+            reward + gamma * np.max(Q[next_index]) - Q[state_index, action]
+        )
+ 
+        state = next_state
+ 
+        if done:
+            break
+ 
+    epsilon = max(epsilon_min, epsilon * epsilon_decay)
+ 
+# Print final Q-table
+print("\nFinal Q-table:")
+print(np.round(Q, 2))
+ 
+# Display learned policy
+symbols = ["↑", "↓", "←", "→"]
+print("\nLearned Policy:")
+ 
+for i in range(GRID_SIZE):
+    for j in range(GRID_SIZE):
+        state = (i, j)
+ 
+        if state == START:
+            print("S", end="  ")
+        elif state == GOAL:
+            print("G", end="  ")
+        elif state in OBSTACLES:
+            print("X", end="  ")
+        else:
+            best_action = np.argmax(Q[state_to_index(state)])
+            print(symbols[best_action], end="  ")
+ 
+    print()
+ 
+# Find optimal path using learned Q-table
+state = START
+path = [state]
+visited = {state}
+ 
+for _ in range(100):
+    if state == GOAL:
+        break
+ 
+    state_index = state_to_index(state)
+    sorted_actions = np.argsort(Q[state_index])[::-1]
+ 
+    moved = False
+ 
+    for action in sorted_actions:
+        next_state = get_next_state(state, action)
+ 
+        if next_state not in OBSTACLES and next_state not in visited:
+            state = next_state
+            path.append(state)
+            visited.add(state)
+            moved = True
+            break
+ 
+    if not moved:
+        break
+ 
+print("\nOptimal Path:")
+print(path)
+ 
+if path[-1] == GOAL:
+    print("Goal reached successfully!")
+else:
+    print("Goal not reached. Try increasing training episodes.")
+ 
+ 
+ 
+-------------------
+ 
+6ANSWER -> TASK B
+ 
+import gymnasium as gym
+import numpy as np
+import matplotlib.pyplot as plt
+import random
+ 
+# Hyperparameters
+episodes = 1000
+alpha = 0.1
+epsilon = 1.0
+epsilon_min = 0.01
+epsilon_decay = 0.995
+ 
+gamma_values = [0.5, 0.9, 0.99]
+ 
+# Store results for different gamma values
+all_rewards = {}
+all_q_tables = {}
+ 
+# Train agent for each gamma value
+for gamma in gamma_values:
+ 
+    env = gym.make("Taxi-v3")
+ 
+    state_size = env.observation_space.n
+    action_size = env.action_space.n
+ 
+    # Initialize Q-table
+    Q = np.zeros((state_size, action_size))
+ 
+    epsilon = 1.0
+    episode_rewards = []
+ 
+    # Training
+    for episode in range(episodes):
+ 
+        state, info = env.reset()
+        total_reward = 0
+        done = False
+ 
+        while not done:
+ 
+            # Epsilon-greedy action selection
+            if random.random() < epsilon:
+                action = env.action_space.sample()
+            else:
+                action = np.argmax(Q[state])
+ 
+            # Take action
+            next_state, reward, terminated, truncated, info = env.step(action)
+ 
+            done = terminated or truncated
+ 
+            # Q-learning update
+            if done:
+                target = reward
+            else:
+                target = reward + gamma * np.max(Q[next_state])
+ 
+            Q[state, action] += alpha * (target - Q[state, action])
+ 
+            state = next_state
+            total_reward += reward
+ 
+        episode_rewards.append(total_reward)
+ 
+        # Reduce exploration
+        epsilon = max(epsilon_min, epsilon * epsilon_decay)
+ 
+    all_rewards[gamma] = episode_rewards
+    all_q_tables[gamma] = Q
+ 
+    env.close()
+ 
+    print(f"Training completed for gamma = {gamma}")
+ 
+ 
+# Plot episode reward vs number of episodes
+plt.figure(figsize=(10, 6))
+ 
+for gamma in gamma_values:
+    plt.plot(
+        all_rewards[gamma],
+        label=f"Gamma = {gamma}"
+    )
+ 
+plt.xlabel("Episodes")
+plt.ylabel("Total Episode Reward")
+plt.title("Taxi-v3: Q-Learning Performance")
+plt.legend()
+plt.grid()
+plt.show()
+ 
+ 
+# Compare average reward over last 100 episodes
+print("\nPerformance Comparison:")
+ 
+for gamma in gamma_values:
+    avg_reward = np.mean(all_rewards[gamma][-100:])
+    print(f"Gamma = {gamma}: Average Reward = {avg_reward:.2f}")
+ 
+ 
+# Show learned optimal trajectory using gamma = 0.9
+best_gamma = 0.9
+Q = all_q_tables[best_gamma]
+ 
+env = gym.make("Taxi-v3", render_mode="ansi")
+ 
+state, info = env.reset()
+done = False
+total_reward = 0
+step_count = 0
+ 
+print("\nLearned Optimal Trajectory")
+print("Gamma =", best_gamma)
+ 
+while not done and step_count < 100:
+ 
+    print(f"\nStep {step_count}")
+    print(env.render())
+ 
+    # Choose best action
+    action = np.argmax(Q[state])
+ 
+    action_names = [
+        "South",
+        "North",
+        "East",
+        "West",
+        "Pickup",
+        "Dropoff"
+    ]
+ 
+    print("Action:", action_names[action])
+ 
+    next_state, reward, terminated, truncated, info = env.step(action)
+ 
+    print("Reward:", reward)
+ 
+    total_reward += reward
+    state = next_state
+ 
+    done = terminated or truncated
+    step_count += 1
+ 
+print("\nFinal State:")
+print(env.render())
+ 
+print("Total Reward:", total_reward)
+print("Total Steps:", step_count)
+ 
+if done:
+    print("Ride completed successfully!")
+ 
+env.close()
+ 
+ 
+ 
+ 
+#############. Assignment4 #######################
+ 
+ 
+Task 1: Baseline Model Implementation Implement these models on the pre-processed Dataset:  Linear Regression (LR)  Decision Tree Regressor (DTR)  Random Forest (RF)  XGBoost  KNN  Support Vector Regressor (SVR) Evaluate these models using:  RMSE, MAE, R² score  Training and inference time  Feature importance analysis (tree-based models) 
+ 
+Task 2: Model Improvement & Extension Implement and evaluate the following advanced models: A. Ensemble + Time-aware models 1. LSTM (Long Short-Term Memory Network) o Handle sequential dependencies and air pollution trends o Input: previous N days' pollution readings 
+2. BiLSTM with Attention o Use attention mechanism to highlight important time points 3. Hybrid: XGBoost + LSTM o XGBoost for spatial data, LSTM for temporal trends B. Transformer-based AQI Prediction 4. AQFormer or AirFormer (Transformer architecture) o Apply attention-based modeling for multi-site AQI prediction o Integrate temporal features and pollutant sequences C. Graph-Based Models (optional if using multiple stations) 5. STGCN (Spatio-Temporal Graph Convolution Network) o Model spatial dependencies (between cities/stations) + temporal AQI drift D. Lightweight Deep Learning 6. 1D-CNN for Regression o Capture localized patterns in pollution time-series 7. Kalman Filter + LSTM Hybrid o Handle noisy data and smooth predictions 8. LightGBM with Hyperparameter Tuning o Use Bayesian optimization or GridSearchCV to improve baseline 
+ 
+Task 3: Comparative Evaluation For all models, compare:  RMSE, MAE, R²  Interpretability vs. accuracy trade-off  Model training time and inference speed  Generalization across different cities/seasons Create:  Tabular summaries  Heatmaps and line plots of errors  Model confidence/uncertainty intervals (optional) 
+ 
+ 
+Answer ->
+ 
+ 
+ 
+ 
+# AQI Prediction: Baseline ML + Deep Learning + Hybrid Models
+# Google Colab / Jupyter
+#
+# Expected CSV columns (rename in CONFIG if needed):
+# timestamp, city, AQI, PM2.5, PM10, NO2, SO2, CO, O3, NH3,
+# temperature, humidity, wind_speed
+#
+# Time split: train <= 2019, validation = 2020, test = 2021.
+# Sequence models use the previous SEQ_LEN rows from the SAME city
+# to predict the next row's AQI.
+ 
+# In Colab, run this first if needed:
+# !pip install -q xgboost lightgbm tensorflow
+ 
+import os
+import time
+import warnings
+warnings.filterwarnings("ignore")
+ 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+ 
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.svm import SVR
+from sklearn.inspection import permutation_importance
+ 
+# Optional model libraries
+try:
+    from xgboost import XGBRegressor
+    HAS_XGBOOST = True
+except ImportError:
+    HAS_XGBOOST = False
+ 
+try:
+    from lightgbm import LGBMRegressor
+    HAS_LIGHTGBM = True
+except ImportError:
+    HAS_LIGHTGBM = False
+ 
+# Deep learning
+try:
+    import tensorflow as tf
+    from tensorflow.keras import layers, Model
+    HAS_TF = True
+except ImportError:
+    HAS_TF = False
+ 
+ 
+# ------------------------- CONFIGURATION -------------------------
+ 
+CSV_PATH = "/content/aqi_dataset.csv"  # Change to your uploaded CSV path
+TIME_COL = "timestamp"
+CITY_COL = "city"
+TARGET_COL = "AQI"
+ 
+# Update these names to match your dataset.
+POLLUTANT_WEATHER_FEATURES = [
+    "PM2.5", "PM10", "NO2", "SO2", "CO", "O3", "NH3",
+    "temperature", "humidity", "wind_speed"
+]
+ 
+SEQ_LEN = 7
+RANDOM_STATE = 42
+EPOCHS = 30
+BATCH_SIZE = 64
+ 
+TRAIN_END = "2019-12-31 23:59:59"
+VAL_START = "2020-01-01"
+VAL_END = "2020-12-31 23:59:59"
+TEST_START = "2021-01-01"
+TEST_END = "2021-12-31 23:59:59"
+ 
+# Set True to run neural network and hybrid models.
+RUN_DEEP_MODELS = True
+ 
+ 
+# ------------------------- LOAD + PREPROCESS -------------------------
+ 
+df = pd.read_csv(CSV_PATH)
+ 
+# If your file uses different column names, rename them here, e.g.:
+# df = df.rename(columns={"Date": "timestamp", "City": "city", "AQI Value": "AQI"})
+ 
+required = [TIME_COL, CITY_COL, TARGET_COL]
+missing_required = [c for c in required if c not in df.columns]
+if missing_required:
+    raise ValueError(
+        f"Missing required columns: {missing_required}. "
+        f"Available columns: {list(df.columns)}"
+    )
+ 
+df[TIME_COL] = pd.to_datetime(df[TIME_COL], errors="coerce")
+df = df.dropna(subset=[TIME_COL, CITY_COL, TARGET_COL]).copy()
+df[TARGET_COL] = pd.to_numeric(df[TARGET_COL], errors="coerce")
+df = df.dropna(subset=[TARGET_COL])
+ 
+# Keep only features that actually exist in the file.
+FEATURES = [c for c in POLLUTANT_WEATHER_FEATURES if c in df.columns]
+if not FEATURES:
+    raise ValueError(
+        "No pollutant/weather feature columns were found. "
+        "Update POLLUTANT_WEATHER_FEATURES to match your CSV."
+    )
+ 
+for c in FEATURES:
+    df[c] = pd.to_numeric(df[c], errors="coerce")
+ 
+df = df.sort_values([CITY_COL, TIME_COL]).drop_duplicates(
+    subset=[CITY_COL, TIME_COL], keep="last"
+)
+ 
+# Time-derived features (cyclical encoding for month/day-of-week)
+df["month"] = df[TIME_COL].dt.month
+df["day_of_week"] = df[TIME_COL].dt.dayofweek
+df["month_sin"] = np.sin(2 * np.pi * df["month"] / 12)
+df["month_cos"] = np.cos(2 * np.pi * df["month"] / 12)
+df["dow_sin"] = np.sin(2 * np.pi * df["day_of_week"] / 7)
+df["dow_cos"] = np.cos(2 * np.pi * df["day_of_week"] / 7)
+ 
+TIME_FEATURES = ["month_sin", "month_cos", "dow_sin", "dow_cos"]
+FEATURES = FEATURES + TIME_FEATURES
+ 
+# Interpolate missing readings within each city, then use median fallback.
+df[FEATURES] = df.groupby(CITY_COL, group_keys=False)[FEATURES].apply(
+    lambda g: g.interpolate(limit_direction="both")
+)
+for c in FEATURES:
+    df[c] = df[c].fillna(df[c].median())
+ 
+df = df.dropna(subset=[TARGET_COL]).reset_index(drop=True)
+ 
+# Split chronologically. Never randomly split time-series data.
+train_mask = df[TIME_COL] <= TRAIN_END
+val_mask = (df[TIME_COL] >= VAL_START) & (df[TIME_COL] <= VAL_END)
+test_mask = (df[TIME_COL] >= TEST_START) & (df[TIME_COL] <= TEST_END)
+ 
+train_df = df.loc[train_mask].copy()
+val_df = df.loc[val_mask].copy()
+test_df = df.loc[test_mask].copy()
+ 
+if train_df.empty or test_df.empty:
+    raise ValueError(
+        "Train or test split is empty. Check date range and timestamp values."
+    )
+ 
+print("Dataset rows:", len(df))
+print("Train:", len(train_df), "Validation:", len(val_df), "Test:", len(test_df))
+print("Cities:", sorted(df[CITY_COL].astype(str).unique()))
+print("Features used:", FEATURES)
+ 
+ 
+# ------------------------- METRICS + STORAGE -------------------------
+ 
+results = []
+test_predictions = {}  # model name -> (y_true, y_pred, city labels, timestamps)
+ 
+def evaluate_predictions(name, y_true, y_pred, train_seconds, inference_seconds,
+                         cities=None, timestamps=None):
+    y_true = np.asarray(y_true).reshape(-1)
+    y_pred = np.asarray(y_pred).reshape(-1)
+    rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+    mae = mean_absolute_error(y_true, y_pred)
+    r2 = r2_score(y_true, y_pred) if len(y_true) > 1 else np.nan
+ 
+    results.append({
+        "Model": name,
+        "RMSE": rmse,
+        "MAE": mae,
+        "R2": r2,
+        "Training_Time_s": train_seconds,
+        "Inference_Time_ms_per_row": (
+            1000 * inference_seconds / max(len(y_true), 1)
+        )
+    })
+    test_predictions[name] = (
+        y_true, y_pred,
+        np.asarray(cities) if cities is not None else None,
+        np.asarray(timestamps) if timestamps is not None else None
+    )
+    print(f"{name:25s} RMSE={rmse:.3f} MAE={mae:.3f} R2={r2:.4f}")
+ 
+ 
+# ------------------------- TASK 1: BASELINE MODELS -------------------------
+ 
+# City is one-hot encoded. Numeric features are median-imputed and scaled.
+numeric_features = FEATURES
+categorical_features = [CITY_COL]
+ 
+numeric_transformer = Pipeline([
+    ("imputer", SimpleImputer(strategy="median")),
+    ("scaler", StandardScaler())
+])
+ 
+categorical_transformer = Pipeline([
+    ("imputer", SimpleImputer(strategy="most_frequent")),
+    ("onehot", OneHotEncoder(handle_unknown="ignore"))
+])
+ 
+preprocessor = ColumnTransformer([
+    ("num", numeric_transformer, numeric_features),
+    ("city", categorical_transformer, categorical_features)
+])
+ 
+X_train_raw = train_df[FEATURES + [CITY_COL]]
+X_test_raw = test_df[FEATURES + [CITY_COL]]
+y_train = train_df[TARGET_COL].values
+y_test = test_df[TARGET_COL].values
+ 
+X_train = preprocessor.fit_transform(X_train_raw)
+X_test = preprocessor.transform(X_test_raw)
+ 
+# Densify for models that require dense arrays.
+if hasattr(X_train, "toarray"):
+    X_train_dense = X_train.toarray()
+    X_test_dense = X_test.toarray()
+else:
+    X_train_dense, X_test_dense = X_train, X_test
+ 
+baseline_models = {
+    "Linear Regression": LinearRegression(),
+    "Decision Tree": DecisionTreeRegressor(
+        max_depth=15, random_state=RANDOM_STATE
+    ),
+    "Random Forest": RandomForestRegressor(
+        n_estimators=250, max_depth=None, min_samples_leaf=2,
+        n_jobs=-1, random_state=RANDOM_STATE
+    ),
+    "KNN": KNeighborsRegressor(n_neighbors=7, weights="distance"),
+    "SVR": SVR(kernel="rbf", C=10, epsilon=0.1)
+}
+ 
+if HAS_XGBOOST:
+    baseline_models["XGBoost"] = XGBRegressor(
+        n_estimators=400, max_depth=6, learning_rate=0.05,
+        subsample=0.8, colsample_bytree=0.8,
+        objective="reg:squarederror", random_state=RANDOM_STATE,
+        n_jobs=-1
+    )
+else:
+    print("XGBoost not installed; skipping XGBoost baseline.")
+ 
+for name, model in baseline_models.items():
+    start = time.perf_counter()
+    model.fit(X_train_dense, y_train)
+    train_seconds = time.perf_counter() - start
+ 
+    start = time.perf_counter()
+    pred = model.predict(X_test_dense)
+    inference_seconds = time.perf_counter() - start
+ 
+    evaluate_predictions(
+        name, y_test, pred, train_seconds, inference_seconds,
+        test_df[CITY_COL].values, test_df[TIME_COL].values
+    )
+ 
+    # Feature importance for tree-based models.
+    if hasattr(model, "feature_importances_"):
+        try:
+            feature_names = preprocessor.get_feature_names_out()
+            importances = model.feature_importances_
+            imp_df = pd.DataFrame({
+                "Feature": feature_names,
+                "Importance": importances
+            }).sort_values("Importance", ascending=False)
+            imp_df.to_csv(
+                f"feature_importance_{name.lower().replace(' ', '_')}.csv",
+                index=False
+            )
+            plt.figure(figsize=(9, 6))
+            sns.barplot(data=imp_df.head(20), x="Importance", y="Feature")
+            plt.title(f"Top 20 Feature Importances - {name}")
+            plt.tight_layout()
+            plt.savefig(
+                f"feature_importance_{name.lower().replace(' ', '_')}.png",
+                dpi=160
+            )
+            plt.show()
+        except Exception as e:
+            print("Could not create feature importance plot:", e)
+ 
+ 
+# ------------------------- LIGHTGBM + GRID SEARCH -------------------------
+ 
+if HAS_LIGHTGBM:
+    from sklearn.model_selection import GridSearchCV
+ 
+    lgbm = LGBMRegressor(random_state=RANDOM_STATE, n_jobs=-1)
+    param_grid = {
+        "n_estimators": [200, 400],
+        "learning_rate": [0.03, 0.07],
+        "num_leaves": [31, 63],
+        "max_depth": [-1, 10]
+    }
+ 
+    # TimeSeriesSplit preserves ordering in the training rows.
+    from sklearn.model_selection import TimeSeriesSplit
+    tscv = TimeSeriesSplit(n_splits=3)
+ 
+    grid = GridSearchCV(
+        lgbm, param_grid, cv=tscv,
+        scoring="neg_root_mean_squared_error",
+        n_jobs=-1, verbose=1
+    )
+    start = time.perf_counter()
+    grid.fit(X_train_dense, y_train)
+    train_seconds = time.perf_counter() - start
+ 
+    best_lgbm = grid.best_estimator_
+    start = time.perf_counter()
+    pred = best_lgbm.predict(X_test_dense)
+    inference_seconds = time.perf_counter() - start
+ 
+    print("Best LightGBM parameters:", grid.best_params_)
+    evaluate_predictions(
+        "LightGBM tuned", y_test, pred, train_seconds, inference_seconds,
+        test_df[CITY_COL].values, test_df[TIME_COL].values
+    )
+else:
+    print("LightGBM not installed; skipping LightGBM.")
+ 
+ 
+# ------------------------- SEQUENCE DATA FOR DEEP MODELS -------------------------
+ 
+def make_sequences(frame, feature_cols, seq_len):
+    """
+    Make sequences separately per city.
+    Sequence rows: [t-seq_len, ..., t-1]
+    Target: AQI at time t.
+    """
+    X_list, y_list, city_list, time_list = [], [], [], []
+ 
+    for city, group in frame.groupby(CITY_COL):
+        group = group.sort_values(TIME_COL).reset_index(drop=True)
+        values = group[feature_cols].values.astype(np.float32)
+        targets = group[TARGET_COL].values.astype(np.float32)
+ 
+        for i in range(seq_len, len(group)):
+            X_list.append(values[i-seq_len:i])
+            y_list.append(targets[i])
+            city_list.append(city)
+            time_list.append(group.loc[i, TIME_COL])
+ 
+    return (
+        np.asarray(X_list, dtype=np.float32),
+        np.asarray(y_list, dtype=np.float32),
+        np.asarray(city_list),
+        np.asarray(time_list)
+    )
+ 
+# Build sequences on each partition. To retain prior observations at split
+# boundaries, build sequences from the full city history and select by target date.
+def make_sequences_with_date_splits(frame, feature_cols, seq_len):
+    X_list, y_list, city_list, time_list = [], [], [], []
+    for city, group in frame.groupby(CITY_COL):
+        group = group.sort_values(TIME_COL).reset_index(drop=True)
+        values = group[feature_cols].values.astype(np.float32)
+        targets = group[TARGET_COL].values.astype(np.float32)
+        for i in range(seq_len, len(group)):
+            X_list.append(values[i-seq_len:i])
+            y_list.append(targets[i])
+            city_list.append(city)
+            time_list.append(group.loc[i, TIME_COL])
+    return (np.asarray(X_list), np.asarray(y_list),
+            np.asarray(city_list), pd.to_datetime(np.asarray(time_list)))
+ 
+# Fit scaler on training rows only; transform all rows with that scaler.
+sequence_scaler = StandardScaler()
+sequence_scaler.fit(train_df[FEATURES])
+ 
+all_df = df.copy()
+all_df[FEATURES] = sequence_scaler.transform(all_df[FEATURES])
+ 
+X_seq_all, y_seq_all, seq_cities, seq_times = make_sequences_with_date_splits(
+    all_df, FEATURES, SEQ_LEN
+)
+ 
+seq_train_mask = pd.to_datetime(seq_times) <= pd.Timestamp(TRAIN_END)
+seq_val_mask = (
+    (pd.to_datetime(seq_times) >= pd.Timestamp(VAL_START)) &
+    (pd.to_datetime(seq_times) <= pd.Timestamp(VAL_END))
+)
+seq_test_mask = (
+    (pd.to_datetime(seq_times) >= pd.Timestamp(TEST_START)) &
+    (pd.to_datetime(seq_times) <= pd.Timestamp(TEST_END))
+)
+ 
+X_seq_train, y_seq_train = X_seq_all[seq_train_mask], y_seq_all[seq_train_mask]
+X_seq_val, y_seq_val = X_seq_all[seq_val_mask], y_seq_all[seq_val_mask]
+X_seq_test, y_seq_test = X_seq_all[seq_test_mask], y_seq_all[seq_test_mask]
+seq_test_cities = seq_cities[seq_test_mask]
+seq_test_times = np.asarray(seq_times)[seq_test_mask]
+ 
+print("Sequence shapes:", X_seq_train.shape, X_seq_val.shape, X_seq_test.shape)
+ 
+ 
+# ------------------------- DEEP LEARNING MODELS -------------------------
+ 
+if RUN_DEEP_MODELS and HAS_TF and len(X_seq_train) > 0 and len(X_seq_test) > 0:
+ 
+    def compile_and_fit(model, model_name):
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+            loss="mse",
+            metrics=["mae"]
+        )
+        callbacks = [
+            tf.keras.callbacks.EarlyStopping(
+                monitor="val_loss", patience=5,
+                restore_best_weights=True
+            )
+        ]
+ 
+        validation_data = (
+            (X_seq_val, y_seq_val) if len(X_seq_val) else None
+        )
+ 
+        start = time.perf_counter()
+        model.fit(
+            X_seq_train, y_seq_train,
+            validation_data=validation_data,
+            epochs=EPOCHS,
+            batch_size=BATCH_SIZE,
+            callbacks=callbacks,
+            verbose=1
+        )
+        train_seconds = time.perf_counter() - start
+ 
+        start = time.perf_counter()
+        pred = model.predict(X_seq_test, batch_size=BATCH_SIZE, verbose=0).reshape(-1)
+        inference_seconds = time.perf_counter() - start
+ 
+        evaluate_predictions(
+            model_name, y_seq_test, pred,
+            train_seconds, inference_seconds,
+            seq_test_cities, seq_test_times
+        )
+        return model, pred
+ 
+    n_features = X_seq_train.shape[2]
+ 
+    # 1) LSTM
+    lstm = tf.keras.Sequential([
+        layers.Input(shape=(SEQ_LEN, n_features)),
+        layers.LSTM(64),
+        layers.Dropout(0.2),
+        layers.Dense(32, activation="relu"),
+        layers.Dense(1)
+    ])
+    lstm, lstm_pred = compile_and_fit(lstm, "LSTM")
+ 
+    # 2) BiLSTM with temporal attention
+    inp = layers.Input(shape=(SEQ_LEN, n_features))
+    h = layers.Bidirectional(layers.LSTM(64, return_sequences=True))(inp)
+    score = layers.Dense(1, activation="tanh")(h)
+    weights = layers.Softmax(axis=1, name="temporal_attention_weights")(score)
+    context = layers.Lambda(
+        lambda z: tf.reduce_sum(z[0] * z[1], axis=1)
+    )([h, weights])
+    h2 = layers.Dense(32, activation="relu")(context)
+    h2 = layers.Dropout(0.2)(h2)
+    out = layers.Dense(1)(h2)
+    bilstm_attention = Model(inp, out)
+    bilstm_attention, bilstm_pred = compile_and_fit(
+        bilstm_attention, "BiLSTM + Attention"
+    )
+ 
+    # 3) 1D CNN regression
+    cnn = tf.keras.Sequential([
+        layers.Input(shape=(SEQ_LEN, n_features)),
+        layers.Conv1D(64, kernel_size=3, padding="same", activation="relu"),
+        layers.Conv1D(32, kernel_size=3, padding="same", activation="relu"),
+        layers.GlobalAveragePooling1D(),
+        layers.Dense(32, activation="relu"),
+        layers.Dense(1)
+    ])
+    cnn, cnn_pred = compile_and_fit(cnn, "1D-CNN")
+ 
+    # 4) Transformer Encoder regressor
+    def transformer_block(x, head_size=32, num_heads=4, ff_dim=64, dropout=0.1):
+        attn = layers.MultiHeadAttention(
+            num_heads=num_heads, key_dim=head_size, dropout=dropout
+        )(x, x)
+        x = layers.LayerNormalization(epsilon=1e-6)(x + attn)
+        ff = layers.Dense(ff_dim, activation="relu")(x)
+        ff = layers.Dropout(dropout)(ff)
+        ff = layers.Dense(x.shape[-1])(ff)
+        return layers.LayerNormalization(epsilon=1e-6)(x + ff)
+ 
+    inp = layers.Input(shape=(SEQ_LEN, n_features))
+    x = layers.Dense(64)(inp)
+    # Learned positional embedding
+    positions = tf.range(start=0, limit=SEQ_LEN, delta=1)
+    pos_embedding = layers.Embedding(input_dim=SEQ_LEN, output_dim=64)(positions)
+    x = x + pos_embedding
+    x = transformer_block(x)
+    x = transformer_block(x)
+    x = layers.GlobalAveragePooling1D()(x)
+    x = layers.Dense(32, activation="relu")(x)
+    out = layers.Dense(1)(x)
+    transformer = Model(inp, out)
+    transformer, transformer_pred = compile_and_fit(transformer, "Transformer")
+ 
+    # 5) XGBoost + LSTM hybrid: concatenate XGBoost prediction and LSTM output,
+    # then learn a linear fusion weight using validation predictions.
+    if HAS_XGBOOST:
+        # Create sequence-aligned tabular rows using the target date/city.
+        seq_test_frame = pd.DataFrame({
+            CITY_COL: seq_test_cities,
+            TIME_COL: pd.to_datetime(seq_test_times)
+        })
+        test_rows = test_df.copy()
+        test_rows[TIME_COL] = pd.to_datetime(test_rows[TIME_COL])
+ 
+        aligned_test = seq_test_frame.merge(
+            test_rows, on=[CITY_COL, TIME_COL], how="left"
+        )
+        valid_alignment = aligned_test[TARGET_COL].notna().values
+ 
+        # Fit XGB on tabular training data, then get predictions for sequence dates.
+        xgb_hybrid = XGBRegressor(
+            n_estimators=400, max_depth=6, learning_rate=0.05,
+            subsample=0.8, colsample_bytree=0.8,
+            objective="reg:squarederror", random_state=RANDOM_STATE,
+            n_jobs=-1
+        )
+        start = time.perf_counter()
+        xgb_hybrid.fit(X_train_dense, y_train)
+        xgb_train_seconds = time.perf_counter() - start
+ 
+        # Tabular feature row matching each sequence target.
+        xgb_test_aligned = preprocessor.transform(
+            aligned_test.loc[valid_alignment, FEATURES + [CITY_COL]]
+        )
+        if hasattr(xgb_test_aligned, "toarray"):
+            xgb_test_aligned = xgb_test_aligned.toarray()
+ 
+        start = time.perf_counter()
+        xgb_aligned_pred = xgb_hybrid.predict(xgb_test_aligned)
+        xgb_inf_seconds = time.perf_counter() - start
+ 
+        # LSTM output is aligned with sequence test target rows.
+        lstm_aligned_pred = lstm_pred[valid_alignment]
+        y_hybrid_true = y_seq_test[valid_alignment]
+ 
+        # Learn blend weights on validation set when enough validation data exists.
+        # For this simple example use a validation-set linear regression fusion.
+        val_frame = pd.DataFrame({
+            CITY_COL: seq_cities[seq_val_mask],
+            TIME_COL: pd.to_datetime(np.asarray(seq_times)[seq_val_mask])
+        }).merge(
+            val_df, on=[CITY_COL, TIME_COL], how="left"
+        )
+        val_valid = val_frame[TARGET_COL].notna().values
+ 
+        if len(X_seq_val) and val_valid.sum() > 0:
+            lstm_val_pred = lstm.predict(X_seq_val, verbose=0).reshape(-1)
+            xgb_val_matrix = preprocessor.transform(
+                val_frame.loc[val_valid, FEATURES + [CITY_COL]]
+            )
+            if hasattr(xgb_val_matrix, "toarray"):
+                xgb_val_matrix = xgb_val_matrix.toarray()
+            xgb_val_pred = xgb_hybrid.predict(xgb_val_matrix)
+            blend_model = LinearRegression()
+            blend_model.fit(
+                np.column_stack([
+                    xgb_val_pred,
+                    lstm_val_pred[val_valid]
+                ]),
+                val_frame.loc[val_valid, TARGET_COL].values
+            )
+            hybrid_pred = blend_model.predict(
+                np.column_stack([xgb_aligned_pred, lstm_aligned_pred])
+            )
+        else:
+            hybrid_pred = 0.5 * xgb_aligned_pred + 0.5 * lstm_aligned_pred
+ 
+        evaluate_predictions(
+            "XGBoost + LSTM",
+            y_hybrid_true, hybrid_pred,
+            xgb_train_seconds, xgb_inf_seconds,
+            seq_test_cities[valid_alignment],
+            seq_test_times[valid_alignment]
+        )
+ 
+elif RUN_DEEP_MODELS:
+    print("TensorFlow not available or sequence data insufficient. "
+          "Install TensorFlow and verify dataset date coverage.")
+ 
+ 
+# ------------------------- COMPARATIVE RESULTS -------------------------
+ 
+results_df = pd.DataFrame(results).sort_values("RMSE")
+results_df.to_csv("aqi_model_comparison.csv", index=False)
+ 
+print("\nFinal comparison (sorted by RMSE):")
+print(results_df.to_string(index=False))
+ 
+ 
+# ------------------------- PLOTS -------------------------
+ 
+# RMSE and MAE comparison
+if not results_df.empty:
+    plt.figure(figsize=(12, 6))
+    plot_df = results_df.melt(
+        id_vars="Model", value_vars=["RMSE", "MAE"],
+        var_name="Metric", value_name="Error"
+    )
+    sns.barplot(data=plot_df, x="Model", y="Error", hue="Metric")
+    plt.xticks(rotation=45, ha="right")
+    plt.title("AQI Model Error Comparison")
+    plt.tight_layout()
+    plt.savefig("model_error_comparison.png", dpi=160)
+    plt.show()
+ 
+    # R2 comparison
+    plt.figure(figsize=(12, 5))
+    sns.barplot(data=results_df, x="Model", y="R2")
+    plt.xticks(rotation=45, ha="right")
+    plt.title("R² Score Comparison")
+    plt.tight_layout()
+    plt.savefig("r2_comparison.png", dpi=160)
+    plt.show()
+ 
+# Actual vs predicted line plot for the best available model
+if test_predictions and not results_df.empty:
+    best_model_name = results_df.iloc[0]["Model"]
+    y_true, y_pred, cities, timestamps = test_predictions[best_model_name]
+ 
+    plot_data = pd.DataFrame({
+        "Actual": y_true,
+        "Predicted": y_pred,
+        "City": cities,
+        "Timestamp": pd.to_datetime(timestamps)
+    })
+ 
+    # Show each city separately to avoid connecting different city series.
+    for city in plot_data["City"].dropna().unique():
+        city_data = plot_data[plot_data["City"] == city].sort_values("Timestamp")
+        plt.figure(figsize=(12, 4))
+        plt.plot(city_data["Timestamp"], city_data["Actual"], label="Actual")
+        plt.plot(city_data["Timestamp"], city_data["Predicted"], label="Predicted")
+        plt.title(f"Actual vs Predicted AQI - {city} ({best_model_name})")
+        plt.xlabel("Time")
+        plt.ylabel("AQI")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(
+            f"actual_vs_predicted_{str(city).replace(' ', '_')}.png",
+            dpi=160
+        )
+        plt.show()
+ 
+# City-wise RMSE heatmap
+city_error_rows = []
+for model_name, (yt, yp, city_labels, time_labels) in test_predictions.items():
+    if city_labels is None:
+        continue
+    for city in np.unique(city_labels):
+        mask = city_labels == city
+        if mask.sum() > 0:
+            city_rmse = np.sqrt(mean_squared_error(yt[mask], yp[mask]))
+            city_error_rows.append({
+                "Model": model_name, "City": city, "RMSE": city_rmse
+            })
+ 
+if city_error_rows:
+    city_error_df = pd.DataFrame(city_error_rows)
+    city_error_df.to_csv("citywise_rmse.csv", index=False)
+    heatmap_data = city_error_df.pivot(
+        index="Model", columns="City", values="RMSE"
+    )
+    plt.figure(figsize=(10, 7))
+    sns.heatmap(heatmap_data, annot=True, fmt=".2f", cmap="YlOrRd")
+    plt.title("City-wise RMSE Heatmap")
+    plt.tight_layout()
+    plt.savefig("citywise_rmse_heatmap.png", dpi=160)
+    plt.show()
+ 
+ 
+# ------------------------- OPTIONAL: PREDICTION INTERVAL -------------------------
+# Random Forest tree-to-tree spread can be used as a rough uncertainty proxy.
+# This is not a calibrated confidence interval.
+if "Random Forest" in baseline_models:
+    rf = baseline_models["Random Forest"]
+    if hasattr(rf, "estimators_"):
+        tree_preds = np.vstack([
+            tree.predict(X_test_dense) for tree in rf.estimators_
+        ])
+        lower = np.percentile(tree_preds, 2.5, axis=0)
+        upper = np.percentile(tree_preds, 97.5, axis=0)
+        interval_df = pd.DataFrame({
+            "Actual_AQI": y_test,
+            "RF_Prediction": rf.predict(X_test_dense),
+            "Lower_2.5": lower,
+            "Upper_97.5": upper
+        })
+        interval_df.to_csv("random_forest_prediction_intervals.csv", index=False)
+ 
+print("\nDone. Output files saved in the current working directory.")
+print("Key files: aqi_model_comparison.csv, model_error_comparison.png,")
+print("citywise_rmse_heatmap.png, feature_importance_*.png")
